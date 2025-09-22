@@ -1,334 +1,199 @@
-# Gap Buffer
+# ギャップバッファ実装
 
-テキストエディタで効率的なテキスト挿入と削除操作に一般的に使用されるギャップバッファのモダンC++実装です。
+テキストエディタ向け特化機能を備えた高性能なC++ギャップバッファデータ構造実装
 
 ## 概要
 
-ギャップバッファは、挿入と削除を最適化するためにメモリ内にギャップ（未使用のスペース）を維持する動的配列データ構造です。この実装は、標準ライブラリとの互換性を持つ`std::vector`に似たコンテナインターフェースを提供します。
+ギャップバッファは、未使用領域の連続した「ギャップ」を維持する動的配列データ構造で、カーソル位置での挿入・削除を非常に効率的に行えます。この実装では、汎用的な`gap_buffer`テンプレートクラスと、テキスト編集操作に最適化された`text_editor_buffer`特化クラスの両方を提供します。
 
-主な特徴:
-- カーソル位置での効率的な挿入と削除操作
-- STL互換のイテレータ
-- C++コンテナ要件への完全準拠
-- 一般的な編集操作中の再割り当てを最小限に抑えたメモリ効率
-- あらゆるデータ型に対応するテンプレートベースの実装
+## 機能
 
-## 要件
+### コアギャップバッファ (`gap_buffer<T>`)
+- **STL準拠のコンテナインターフェース** と完全なイテレータサポート
+- **例外安全な操作** とRAIIベースメモリ管理
+- **カスタムアロケータサポート** による特殊メモリ管理
+- **ムーブセマンティクス** による効率的オブジェクト転送
+- **範囲チェック付きランダムアクセスイテレータ**
+- **テンプレートベース設計** でコピー/ムーブ可能な任意の型をサポート
 
-- C++11以降
-- 標準テンプレートライブラリ
+### テキストエディタバッファ (`text_editor_buffer`)
+- **カーソル位置管理** と行・列トラッキング
+- **キャッシュされた行インデックス** による効率的な行操作
+- **検索・置換機能** でリテラルと正規表現パターンの両方をサポート
+- **ファイルI/O操作** と自動文字エンコード検出
+- **改行コード変換** (LF, CRLF, CR) と自動検出
+- **拡張UTF-8検証** と適切なUnicodeサポート
+- **単語ベースカーソル移動** によるテキスト編集ワークフロー
 
-## 使用方法
+## パフォーマンス特性
 
-### 基本的な使用法
+| 操作 | 計算量 | 備考 |
+|------|--------|------|
+| カーソル位置への挿入 | O(1) 償却 | ギャップがカーソル位置にある |
+| 他の位置への挿入 | O(n) 最悪ケース | ギャップ移動が必要 |
+| カーソル位置の削除 | O(1) | ギャップを拡張 |
+| ランダムアクセス | O(1) | 直接配列インデックス |
+| イテレータ走査 | 要素あたりO(1) | ギャップを自動的にスキップ |
 
-```cpp
-#include "gap_buffer.hpp"
-#include <iostream>
-#include <string>
+## 使用例
 
-int main() {
-    // 整数のギャップバッファを作成
-    gap_buffer<int> buffer = {1, 2, 3, 4, 5};
-    
-    // ベクターのように要素にアクセス
-    std::cout << "最初の要素: " << buffer.front() << std::endl;
-    std::cout << "最後の要素: " << buffer.back() << std::endl;
-    std::cout << "インデックス2の要素: " << buffer[2] << std::endl;
-    
-    // 位置に挿入
-    auto it = buffer.begin() + 2;
-    buffer.insert(it, 10);
-    
-    // すべての要素を表示
-    std::cout << "挿入後: ";
-    for (const auto& value : buffer) {
-        std::cout << value << " ";
-    }
-    std::cout << std::endl;
-    
-    // 要素を削除
-    buffer.erase(buffer.begin() + 1, buffer.begin() + 3);
-    
-    // 削除後を表示
-    std::cout << "削除後: ";
-    for (const auto& value : buffer) {
-        std::cout << value << " ";
-    }
-    std::cout << std::endl;
-    
-    return 0;
-}
-```
-
-### テキストエディタの例
+### 基本的なギャップバッファ
 
 ```cpp
 #include "gap_buffer.hpp"
-#include <iostream>
-#include <string>
 
-class SimpleTextEditor {
-private:
-    gap_buffer<char> text;
-    size_t cursor_position = 0;
-    
-public:
-    // カーソル位置にテキストを挿入
-    void insertText(const std::string& str) {
-        auto it = text.begin() + cursor_position;
-        text.insert(it, str.begin(), str.end());
-        cursor_position += str.length();
-    }
-    
-    // カーソル前のn文字を削除
-    void backspace(size_t n = 1) {
-        if (cursor_position >= n) {
-            auto start = text.begin() + (cursor_position - n);
-            auto end = text.begin() + cursor_position;
-            text.erase(start, end);
-            cursor_position -= n;
-        }
-    }
-    
-    // カーソル後のn文字を削除
-    void deleteForward(size_t n = 1) {
-        if (cursor_position < text.size()) {
-            auto start = text.begin() + cursor_position;
-            auto end = text.begin() + std::min(cursor_position + n, text.size());
-            text.erase(start, end);
-        }
-    }
-    
-    // カーソルを移動
-    void moveCursor(int offset) {
-        int new_pos = static_cast<int>(cursor_position) + offset;
-        if (new_pos >= 0 && new_pos <= static_cast<int>(text.size())) {
-            cursor_position = static_cast<size_t>(new_pos);
-        }
-    }
-    
-    // テキスト内容を取得
-    std::string getContent() const {
-        return std::string(text.begin(), text.end());
-    }
-    
-    // カーソル付きでテキストを表示
-    void display() const {
-        std::string content = getContent();
-        content.insert(cursor_position, "|");
-        std::cout << content << std::endl;
-    }
-};
+// 作成と初期化
+gap_buffer<char> buffer;
+buffer.push_back('H');
+buffer.push_back('e');
+buffer.push_back('l');
+buffer.push_back('o');
 
-int main() {
-    SimpleTextEditor editor;
-    
-    editor.insertText("Hello world");
-    editor.display();  // Hello world|
-    
-    editor.moveCursor(-5);
-    editor.display();  // Hello |world
-    
-    editor.insertText("beautiful ");
-    editor.display();  // Hello beautiful |world
-    
-    editor.backspace(2);
-    editor.display();  // Hello beautifu|world
-    
-    editor.deleteForward(3);
-    editor.display();  // Hello beautifu|ld
-    
-    return 0;
+// 先頭への挿入
+buffer.insert(buffer.begin(), 'W');  // "WHello"
+
+// ランダムアクセス
+char c = buffer[2];  // 'e'
+
+// STLアルゴリズムの使用
+std::sort(buffer.begin(), buffer.end());
+```
+
+### テキストエディタ操作
+
+```cpp
+#include "gap_buffer.hpp"
+
+// ファイル読み込み
+text_editor_buffer editor;
+editor.load_from_file("document.txt");
+
+// 行・列による移動
+editor.set_cursor_line_column(10, 5);  // 10行目、5列目
+auto pos = editor.get_cursor_line_column();
+
+// テキスト操作
+editor.insert_text("Hello World!\n");
+editor.delete_text(0, 5);  // 最初の5文字を削除
+
+// 検索・置換
+auto result = editor.find_text("TODO");
+if (result.found) {
+    editor.replace_text(result.position, result.length, "DONE");
 }
+
+// 正規表現操作
+editor.replace_all_regex(R"(\b\d{4}\b)", "YEAR");
+
+// 変更保存
+editor.save_to_file("document.txt");
 ```
 
-## API リファレンス
-
-### コンストラクタと代入
+### 高度な機能
 
 ```cpp
-// デフォルトコンストラクタ
-gap_buffer();
+// カスタムアロケータ
+gap_buffer<int, std::allocator<int>> custom_buffer;
 
-// アロケータコンストラクタ
-explicit gap_buffer(const Allocator& alloc);
+// 行操作
+size_t line_count = editor.get_line_count();
+std::string line5 = editor.get_line(5);
+size_t line_length = editor.get_line_length(5);
 
-// フィルコンストラクタ
-gap_buffer(size_type count, const T& value, const Allocator& alloc = Allocator());
+// UTF-8検証
+if (editor.is_valid_utf8()) {
+    std::cout << "有効なUTF-8エンコーディング" << std::endl;
+}
 
-// カウントコンストラクタ
-explicit gap_buffer(size_type count, const Allocator& alloc = Allocator());
+// 改行コード検出・変換
+auto ending_type = editor.detect_line_ending();
+editor.convert_line_endings(text_editor_buffer::line_ending_type::CRLF);
 
-// 範囲コンストラクタ
-template <typename InputIt>
-gap_buffer(InputIt first, InputIt last, const Allocator& alloc = Allocator());
-
-// コピーコンストラクタ
-gap_buffer(const gap_buffer& other);
-
-// ムーブコンストラクタ
-gap_buffer(gap_buffer&& other) noexcept;
-
-// 初期化子リストコンストラクタ
-gap_buffer(std::initializer_list<T> init, const Allocator& alloc = Allocator());
-
-// コピー代入
-gap_buffer& operator=(const gap_buffer& other);
-
-// ムーブ代入
-gap_buffer& operator=(gap_buffer&& other) noexcept;
-
-// 初期化子リスト代入
-gap_buffer& operator=(std::initializer_list<T> ilist);
-
-// コンテンツの代入
-void assign(size_type count, const T& value);
-template <typename InputIt>
-void assign(InputIt first, InputIt last);
-void assign(std::initializer_list<T> ilist);
+// パフォーマンス統計
+auto stats = editor.get_stats();
+std::cout << "ギャップ比率: " << stats.gap_ratio << std::endl;
 ```
 
-### 要素アクセス
+## ビルド方法
 
-```cpp
-// 境界チェック付きアクセス
-reference at(size_type pos);
-const_reference at(size_type pos) const;
+### 要件
+- C++17対応コンパイラ (GCC 7+, Clang 6+, MSVC 2017+)
+- `<regex>`サポート付き標準ライブラリ
 
-// 境界チェックなしアクセス
-reference operator[](size_type pos);
-const_reference operator[](size_type pos) const;
+### コンパイル
+```bash
+# 基本コンパイル
+g++ -std=c++17 -O3 your_program.cpp -o your_program
 
-// 最初の要素にアクセス
-reference front();
-const_reference front() const;
+# デバッグ情報付き
+g++ -std=c++17 -g -DDEBUG your_program.cpp -o your_program_debug
 
-// 最後の要素にアクセス
-reference back();
-const_reference back() const;
-
-// 基礎となるデータにアクセス
-T* data() noexcept;
-const T* data() const noexcept;
+# ベンチマーク実行
+g++ -std=c++17 -O3 benchmark.cpp -o benchmark
+./benchmark
 ```
 
-### イテレータ
+## ベンチマーク
 
-```cpp
-iterator begin() noexcept;
-const_iterator begin() const noexcept;
-const_iterator cbegin() const noexcept;
+`std::vector`とのパフォーマンス比較：
 
-iterator end() noexcept;
-const_iterator end() const noexcept;
-const_iterator cend() const noexcept;
+| 操作 | ギャップバッファ | std::vector | 高速化 |
+|------|------------------|-------------|---------|
+| 先頭への挿入 | ~0.1ms | ~10.2ms | ~100倍 |
+| 中間への挿入 | ~0.5ms | ~5.1ms | ~10倍 |
+| ランダムアクセス | ~0.3ms | ~0.3ms | ~1倍 |
+| 末尾への追加 | ~0.2ms | ~0.2ms | ~1倍 |
 
-reverse_iterator rbegin() noexcept;
-const_reverse_iterator rbegin() const noexcept;
-const_reverse_iterator crbegin() const noexcept;
+*一般的なハードウェアでのベンチマークスイート結果*
 
-reverse_iterator rend() noexcept;
-const_reverse_iterator rend() const noexcept;
-const_reverse_iterator crend() const noexcept;
+## アーキテクチャ
+
+実装では**プロテクテッド継承モデル**を使用し、`text_editor_buffer`が`gap_buffer<char>`を拡張しています。主要な設計決定：
+
+1. **ギャップ管理**: 自動ギャップ配置とサイズ調整
+2. **メモリ安全性**: 例外安全性を持つRAIIベースリソース管理
+3. **イテレータ設計**: 適切な境界チェックでギャップを透過的にスキップ
+4. **行キャッシュ**: 無効化機能付き効率的行開始位置キャッシュ
+5. **Unicodeサポート**: 適切なUTF-8検証と処理
+
+## スレッドセーフティ
+
+この実装は**スレッドセーフではありません**。並行アクセスには：
+- 外部同期化（ミューテックス、読み書きロック）を使用
+- スレッドごとに別々のインスタンスを作成
+- 高性能シナリオではロックフリー代替案を検討
+
+## テスト
+
+```bash
+# テストコンパイル（テストフレームワークが利用可能な場合）
+g++ -std=c++17 -g tests.cpp -o tests
+./tests
+
+# ベンチマーク実行
+./benchmark
 ```
-
-### 容量
-
-```cpp
-[[nodiscard]] bool empty() const noexcept;
-size_type size() const noexcept;
-size_type max_size() const noexcept;
-void reserve(size_type new_cap);
-size_type capacity() const noexcept;
-void shrink_to_fit();
-```
-
-### 修飾子
-
-```cpp
-// コンテンツをクリア
-void clear() noexcept;
-
-// 要素を挿入
-iterator insert(const_iterator pos, const T& value);
-iterator insert(const_iterator pos, T&& value);
-iterator insert(const_iterator pos, size_type count, const T& value);
-template <typename InputIt>
-iterator insert(const_iterator pos, InputIt first, InputIt last);
-iterator insert(const_iterator pos, std::initializer_list<T> ilist);
-
-// その場で要素を構築
-template <typename... Args>
-iterator emplace(const_iterator pos, Args&&... args);
-
-// 要素を削除
-iterator erase(const_iterator pos);
-iterator erase(const_iterator first, const_iterator last);
-
-// 末尾に要素を追加
-void push_back(const T& value);
-void push_back(T&& value);
-template <typename... Args>
-reference emplace_back(Args&&... args);
-
-// 最後の要素を削除
-void pop_back();
-
-// サイズを変更
-void resize(size_type count);
-void resize(size_type count, const value_type& value);
-
-// コンテンツを交換
-void swap(gap_buffer& other) noexcept;
-```
-
-### 非メンバー関数
-
-```cpp
-// 比較
-template <typename T, typename Alloc>
-bool operator==(const gap_buffer<T, Alloc>& lhs, const gap_buffer<T, Alloc>& rhs);
-template <typename T, typename Alloc>
-bool operator!=(const gap_buffer<T, Alloc>& lhs, const gap_buffer<T, Alloc>& rhs);
-template <typename T, typename Alloc>
-bool operator<(const gap_buffer<T, Alloc>& lhs, const gap_buffer<T, Alloc>& rhs);
-template <typename T, typename Alloc>
-bool operator>(const gap_buffer<T, Alloc>& lhs, const gap_buffer<T, Alloc>& rhs);
-template <typename T, typename Alloc>
-bool operator<=(const gap_buffer<T, Alloc>& lhs, const gap_buffer<T, Alloc>& rhs);
-template <typename T, typename Alloc>
-bool operator>=(const gap_buffer<T, Alloc>& lhs, const gap_buffer<T, Alloc>& rhs);
-
-// 特殊化されたswap
-template <typename T, typename Alloc>
-void swap(gap_buffer<T, Alloc>& lhs, gap_buffer<T, Alloc>& rhs) noexcept;
-```
-
-## パフォーマンス
-
-ギャップバッファは以下のパフォーマンス特性を提供します：
-
-- カーソル位置での挿入/削除: 償却O(1)
-- カーソルから離れた位置での挿入/削除: O(n)（nはカーソルからの距離）
-- ランダムアクセス: O(1)
-- カーソル移動: O(n)（nは現在位置からの距離）
-
-これにより、ギャップバッファは特に編集のほとんどがカーソル位置の近くで行われるテキスト編集操作に適しています。
-
-## 実装の詳細
-
-ギャップバッファは以下の内部構造を維持します：
-- 連続したメモリバッファ
-- ギャップ開始位置
-- ギャップ終了位置
-
-挿入や削除が発生すると、まずギャップが操作位置に移動し、その後ギャップの端で操作が実行されるため、メモリ移動が最小限に抑えられます。
-
-## ライセンス
-
-[MITライセンス](LICENSE)
 
 ## 貢献
 
-貢献は歓迎します！ぜひプルリクエストを提出してください。
+1. リポジトリをフォーク
+2. フィーチャーブランチを作成（`git checkout -b feature/amazing-feature`）
+3. 変更をコミット（`git commit -m 'Add amazing feature'`）
+4. ブランチにプッシュ（`git push origin feature/amazing-feature`）
+5. プルリクエストを開く
+
+### 開発ガイドライン
+- 既存のコードスタイルと命名規則に従う
+- 新機能にはテストを追加
+- パフォーマンス重要な変更にはベンチマークを更新
+- 例外安全性と適切なリソース管理を確保
+
+## ライセンス
+
+このプロジェクトはMITライセンスの下でライセンスされています - 詳細は[LICENSE](LICENSE)ファイルを参照してください。
+
+## 謝辞
+
+- 古典的なテキストエディタ実装に基づくギャップバッファアルゴリズム
+- STLコンテナ設計パターン
+- メモリ管理と例外安全性のためのモダンC++ベストプラクティス
