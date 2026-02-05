@@ -42,9 +42,9 @@ protected:  // privateからprotectedに変更
             if (buffer_) {
                 // Destroy constructed elements
                 for (size_t i = 0; i < constructed_count_; ++i) {
-                    alloc_.destroy(buffer_ + i);
+                    std::allocator_traits<Allocator>::destroy(alloc_, buffer_ + i);
                 }
-                alloc_.deallocate(buffer_, capacity_);
+                std::allocator_traits<Allocator>::deallocate(alloc_, buffer_, capacity_);
             }
         }
         
@@ -87,15 +87,15 @@ protected:  // privateからprotectedに変更
             // Copy elements before gap
             size_t before_gap = gap_start;
             for (size_t i = 0; i < before_gap; ++i) {
-                alloc.construct(new_buffer + i, std::move_if_noexcept(buffer[i]));
+                std::allocator_traits<Allocator>::construct(alloc, new_buffer + i, std::move_if_noexcept(buffer[i]));
                 guard.increment_constructed();
             }
             
             // Copy elements after gap
             size_t after_gap = buffer_size - gap_end;
             for (size_t i = 0; i < after_gap; ++i) {
-                alloc.construct(new_buffer + before_gap + i, 
-                               std::move_if_noexcept(buffer[gap_end + i]));
+                std::allocator_traits<Allocator>::construct(alloc, new_buffer + before_gap + i, 
+                                                            std::move_if_noexcept(buffer[gap_end + i]));
                 guard.increment_constructed();
             }
         }
@@ -103,10 +103,10 @@ protected:  // privateからprotectedに変更
         // Destroy old buffer
         if (buffer) {
             for (size_t i = 0; i < gap_start; ++i)
-                alloc.destroy(buffer + i);
+                std::allocator_traits<Allocator>::destroy(alloc, buffer + i);
             for (size_t i = gap_end; i < buffer_size; ++i)
-                alloc.destroy(buffer + i);
-            alloc.deallocate(buffer, buffer_size);
+                std::allocator_traits<Allocator>::destroy(alloc, buffer + i);
+            std::allocator_traits<Allocator>::deallocate(alloc, buffer, buffer_size);
         }
         
         buffer = guard.get();
@@ -353,7 +353,7 @@ public:
             }
             
             for (size_t i = 0; i < count; ++i) {
-                alloc.construct(buffer + i, value);
+                std::allocator_traits<Allocator>::construct(alloc, buffer + i, value);
             }
             
             gap_start = count;
@@ -529,10 +529,10 @@ public:
     void clear() noexcept {
         if (buffer) {
             for (size_t i = 0; i < gap_start; ++i) {
-                alloc.destroy(buffer + i);
+                std::allocator_traits<Allocator>::destroy(alloc, buffer + i);
             }
             for (size_t i = gap_end; i < buffer_size; ++i) {
-                alloc.destroy(buffer + i);
+                std::allocator_traits<Allocator>::destroy(alloc, buffer + i);
             }
         }
         gap_start = 0;
@@ -547,7 +547,7 @@ public:
             grow();
         }
         
-        alloc.construct(buffer + gap_start, value);
+        std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, value);
         size_t old_gap_start = gap_start;
         ++gap_start;
         
@@ -562,7 +562,7 @@ public:
             grow();
         }
         
-        alloc.construct(buffer + gap_start, std::move(value));
+        std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, std::move(value));
         size_t old_gap_start = gap_start;
         ++gap_start;
         
@@ -583,7 +583,7 @@ public:
         
         size_t old_gap_start = gap_start;
         for (size_t i = 0; i < count; ++i) {
-            alloc.construct(buffer + gap_start, value);
+            std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, value);
             ++gap_start;
         }
         
@@ -607,7 +607,7 @@ public:
         
         size_t old_gap_start = gap_start;
         for (auto it = first; it != last; ++it) {
-            alloc.construct(buffer + gap_start, *it);
+            std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, *it);
             ++gap_start;
         }
         
@@ -627,7 +627,7 @@ public:
             grow();
         }
         
-        alloc.construct(buffer + gap_start, std::forward<Args>(args)...);
+        std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, std::forward<Args>(args)...);
         size_t old_gap_start = gap_start;
         ++gap_start;
         
@@ -649,7 +649,7 @@ public:
         move_gap(position);
         
         for (size_t i = 0; i < count && gap_end < buffer_size; ++i) {
-            alloc.destroy(buffer + gap_end);
+            std::allocator_traits<Allocator>::destroy(alloc, buffer + gap_end);
             ++gap_end;
         }
         
@@ -663,7 +663,7 @@ public:
             grow();
         }
         
-        alloc.construct(buffer + gap_start, value);
+        std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, value);
         ++gap_start;
     }
     
@@ -674,7 +674,7 @@ public:
             grow();
         }
         
-        alloc.construct(buffer + gap_start, std::move(value));
+        std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, std::move(value));
         ++gap_start;
     }
     
@@ -686,7 +686,7 @@ public:
             grow();
         }
         
-        alloc.construct(buffer + gap_start, std::forward<Args>(args)...);
+        std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, std::forward<Args>(args)...);
         ++gap_start;
         
         return buffer[gap_start - 1];
@@ -716,7 +716,7 @@ public:
             move_gap(current_size);
             
             for (size_t i = current_size; i < count; ++i) {
-                alloc.construct(buffer + gap_start, T());
+                std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, T());
                 ++gap_start;
             }
         } else if (count < current_size) {
@@ -738,7 +738,7 @@ public:
             move_gap(current_size);
             
             for (size_t i = current_size; i < count; ++i) {
-                alloc.construct(buffer + gap_start, value);
+                std::allocator_traits<Allocator>::construct(alloc, buffer + gap_start, value);
                 ++gap_start;
             }
         } else if (count < current_size) {
