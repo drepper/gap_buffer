@@ -47,6 +47,7 @@ gap_buffer<char> buffer;
 buffer.push_back('H');
 buffer.push_back('e');
 buffer.push_back('l');
+buffer.push_back('l');
 buffer.push_back('o');
 
 // Insert at beginning
