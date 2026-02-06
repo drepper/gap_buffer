@@ -37,6 +37,8 @@ protected:  // privateからprotectedに変更
     public:
         buffer_guard(Allocator& alloc, T* buf, size_t cap) 
             : alloc_(alloc), buffer_(buf), capacity_(cap), constructed_count_(0) {}
+	buffer_guard(const buffer_guard&) = delete;
+	buffer_guard& operator=(const buffer_guard&) = delete;
         
         ~buffer_guard() {
             if (buffer_) {
@@ -259,25 +261,25 @@ public:
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
     // Constructors
-    gap_buffer() : buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {}
+    gap_buffer() : alloc(), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {}
     
-    explicit gap_buffer(const Allocator& alloc) 
-        : alloc(alloc), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {}
+    explicit gap_buffer(const Allocator& alloc_) 
+        : alloc(alloc_), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {}
     
-    gap_buffer(size_type count, const T& value, const Allocator& alloc = Allocator())
-        : alloc(alloc), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {
+    gap_buffer(size_type count, const T& value, const Allocator& alloc_ = Allocator())
+        : alloc(alloc_), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {
         assign(count, value);
     }
     
-    explicit gap_buffer(size_type count, const Allocator& alloc = Allocator())
-        : alloc(alloc), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {
+    explicit gap_buffer(size_type count, const Allocator& alloc_ = Allocator())
+        : alloc(alloc_), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {
         resize(count);
     }
     
     template <typename InputIt, typename = 
               std::enable_if_t<!std::is_integral<InputIt>::value>>
-    gap_buffer(InputIt first, InputIt last, const Allocator& alloc = Allocator())
-        : alloc(alloc), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {
+    gap_buffer(InputIt first, InputIt last, const Allocator& alloc_ = Allocator())
+        : alloc(alloc_), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {
         assign(first, last);
     }
     
@@ -296,8 +298,8 @@ public:
         other.buffer_size = 0;
     }
     
-    gap_buffer(std::initializer_list<T> init, const Allocator& alloc = Allocator())
-        : alloc(alloc), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {
+    gap_buffer(std::initializer_list<T> init, const Allocator& alloc_ = Allocator())
+        : alloc(alloc_), buffer(nullptr), gap_start(0), gap_end(0), buffer_size(0) {
         assign(init);
     }
     
@@ -867,10 +869,10 @@ public:
     };
     
     // Constructors
-    text_editor_buffer() : gap_buffer<char>(), cursor_pos(0), line_cache_valid(false) {}
+    text_editor_buffer() : gap_buffer<char>(), cursor_pos(0), line_starts(), line_cache_valid(false) {}
     
     explicit text_editor_buffer(const std::string& text) 
-        : gap_buffer<char>(text.begin(), text.end()), cursor_pos(0), line_cache_valid(false) {}
+        : gap_buffer<char>(text.begin(), text.end()), cursor_pos(0), line_starts(), line_cache_valid(false) {}
     
     // Cursor position management
     size_t get_cursor_position() const noexcept {
