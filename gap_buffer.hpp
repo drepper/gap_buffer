@@ -701,11 +701,11 @@ public:
         if (last_pos < gap_start) {
             // Element is before gap
             --gap_start;
-            alloc.destroy(buffer + gap_start);
+	    std::allocator_traits<Allocator>::destroy(alloc, buffer + gap_start);
         } else {
             // Element is after gap
             size_t real_pos = last_pos + (gap_end - gap_start);
-            alloc.destroy(buffer + real_pos);
+	    std::allocator_traits<Allocator>::destroy(alloc, buffer + real_pos);
             ++gap_end;
         }
     }
